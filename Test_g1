@@ -1,1 +1,196 @@
+CREATE PROCEDURE [test].[map_proc]
+(
+    @SourceSchema NVARCHAR(128),
+    @SourceTable NVARCHAR(128),
+    @MappingSchema NVARCHAR(128),
+    @MappingTable NVARCHAR(128),
+    @MappingSchema2 NVARCHAR(128),
+    @MappingTable2 NVARCHAR(128)
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
 
+    DECLARE @DynamicSQL NVARCHAR(MAX);
+    DECLARE @ColumnNames NVARCHAR(MAX);
+    DECLARE @EmailColumnName NVARCHAR(128);
+    DECLARE @IDColumnName NVARCHAR(128);
+    DECLARE @SourceTableName NVARCHAR(256) = QUOTENAME(@SourceSchema) + '.' + QUOTENAME(@SourceTable);
+    DECLARE @MappingTableName NVARCHAR(256) = QUOTENAME(@MappingSchema) + '.' + QUOTENAME(@MappingTable);
+    DECLARE @MappingTableName2 NVARCHAR(256) = QUOTENAME(@MappingSchema2) + '.' + QUOTENAME(@MappingTable2);
+    DECLARE @NewTableName NVARCHAR(256) = QUOTENAME(@SourceSchema) + '.' + QUOTENAME(@SourceTable + '_Temp');
+
+    -- Step 1: Check the SourceSchema
+    IF @SourceSchema = 'test'
+    BEGIN
+        -- Identify the primary email column
+        SELECT @EmailColumnName = NAME
+        FROM SYS.COLUMNS WITH (NOLOCK)
+        WHERE object_id = OBJECT_ID(@SourceSchema + '.' + @SourceTable)
+        AND NAME IN ('Email_p', 'email_s');
+
+        -- Ensure that we found an email column
+        IF @EmailColumnName IS NULL
+        BEGIN
+            RAISERROR('No Email column found in the source table.', 16, 1);
+            RETURN;
+        END;
+
+        -- Step 2: Dynamically select columns for the 'test' schema
+        SELECT @ColumnNames = STRING_AGG('src.' + QUOTENAME(COLUMN_NAME), ', ')
+        FROM INFORMATION_SCHEMA.COLUMNS WITH (NOLOCK)
+        WHERE TABLE_NAME = @SourceTable
+        AND TABLE_SCHEMA = @SourceSchema;
+
+        PRINT 'Column Names: ' + @ColumnNames;
+
+        -- Step 3: Create the CTE and dynamically build the SQL for the 'test' schema
+        SET @DynamicSQL = '
+        WITH CTE_TestSchema AS (
+            SELECT ' + @ColumnNames + ',
+                CASE 
+                    WHEN LOWER(src.' + QUOTENAME(@EmailColumnName) + ') IN (SELECT LOWER(map.New_Email) FROM ' + @MappingTableName + ' WITH (NOLOCK))
+                    THEN ''Y'' ELSE ''N'' 
+                END AS Status,
+                CASE 
+                    WHEN LOWER(src.' + QUOTENAME(@EmailColumnName) + ') IN (SELECT LOWER(map.New_Email) FROM ' + @MappingTableName + ' WITH (NOLOCK))
+                    THEN GETDATE() ELSE NULL 
+                END AS Matched_Date_Time,
+                map.Id as Matched_Id,
+				map.C_Matched as Cr_Matched
+            FROM ' + @SourceTableName + ' AS src WITH (NOLOCK)
+            LEFT JOIN ' + @MappingTableName + ' AS map WITH (NOLOCK)
+            ON LOWER(src.' + QUOTENAME(@EmailColumnName) + ') = LOWER(map.New_Email)
+        )
+        SELECT * INTO ' + @NewTableName + ' FROM CTE_TestSchema;';
+
+        -- Step 4: Execute the dynamic SQL to create the table for the 'test' schema
+        BEGIN TRY
+            EXEC sp_executesql @DynamicSQL;
+        END TRY
+        BEGIN CATCH
+            PRINT 'Error: ' + ERROR_MESSAGE();
+        END CATCH;
+
+        PRINT 'Dynamic SQL executed for table: ' + @NewTableName;
+    END
+    ELSE IF @SourceSchema = 'dummy'
+    BEGIN
+        -- Identify email and ID columns
+        SELECT @EmailColumnName = NAME
+        FROM SYS.COLUMNS WITH (NOLOCK)
+        WHERE object_id = OBJECT_ID(@SourceSchema + '.' + @SourceTable)
+        AND NAME IN ('Email');
+
+        SELECT @IDColumnName = NAME
+        FROM SYS.COLUMNS WITH (NOLOCK)
+        WHERE object_id = OBJECT_ID(@SourceSchema + '.' + @SourceTable)
+        AND NAME IN ('IDNumber', 'ID', 'id #');
+
+        -- Check if no columns are found
+        IF @EmailColumnName IS NULL AND @IDColumnName IS NULL
+        BEGIN
+            RAISERROR('No Email or ID column found in the source table.', 16, 1);
+            RETURN;
+        END;
+
+        -- Step 2: Dynamically select columns for the 'dummy' schema
+        SELECT @ColumnNames = STRING_AGG('src.' + QUOTENAME(COLUMN_NAME), ', ')
+        FROM INFORMATION_SCHEMA.COLUMNS WITH (NOLOCK)
+        WHERE TABLE_NAME = @SourceTable
+        AND TABLE_SCHEMA = @SourceSchema;
+
+        PRINT 'Column Names: ' + @ColumnNames;
+
+        -- Handle cases based on available columns
+        IF @EmailColumnName IS NOT NULL AND @IDColumnName IS NULL
+        BEGIN
+            -- Create CTE based on Email
+            SET @DynamicSQL = '
+            WITH CTE_PrimaryEmail AS (
+                SELECT ' + @ColumnNames + ',
+                    CASE 
+                        WHEN LOWER(src.' + QUOTENAME(@EmailColumnName) + ') IN (SELECT LOWER(map.New_Email) FROM ' + @MappingTableName + ' WITH (NOLOCK))
+                        THEN ''Y'' ELSE ''N'' 
+                    END AS Status,
+                    CASE 
+                        WHEN LOWER(src.' + QUOTENAME(@EmailColumnName) + ') IN (SELECT LOWER(map.New_Email) FROM ' + @MappingTableName + ' WITH (NOLOCK))
+                        THEN GETDATE() ELSE NULL 
+                    END AS Matched_Date_Time,
+                    map.Id as Matched_Id,
+					map.C_Matched as Cr_Matched
+                FROM ' + @SourceTableName + ' AS src WITH (NOLOCK)
+                LEFT JOIN ' + @MappingTableName + ' AS map WITH (NOLOCK)
+                ON LOWER(src.' + QUOTENAME(@EmailColumnName) + ') = LOWER(map.New_Email)
+            )
+            SELECT * INTO ' + @NewTableName + ' FROM CTE_PrimaryEmail;';
+
+            -- Execute the dynamic SQL
+            BEGIN TRY
+                EXEC sp_executesql @DynamicSQL;
+            END TRY
+            BEGIN CATCH
+                PRINT 'Error: ' + ERROR_MESSAGE();
+            END CATCH;
+        END
+        ELSE IF @EmailColumnName IS NULL AND @IDColumnName IS NOT NULL
+        BEGIN
+            -- CTE based on ID
+            SET @DynamicSQL = '
+            WITH CTE_Id AS (
+                SELECT ' + @ColumnNames + ',
+                    CASE 
+                        WHEN src.' + QUOTENAME(@IDColumnName) + ' IN (SELECT map2.CRD FROM ' + @MappingTableName2 + ' WITH (NOLOCK))
+                        THEN ''Y'' ELSE ''N'' 
+                    END AS Status,
+                    CASE 
+                        WHEN src.' + QUOTENAME(@IDColumnName) + ' IN (SELECT map2.CRD FROM ' + @MappingTableName2 + ' WITH (NOLOCK))
+                        THEN GETDATE() ELSE NULL 
+                    END AS Matched_Date_Time,
+                    map2.Id as SF_Matched_Id,
+					map2.C_Matched as Cr_Matched
+                FROM ' + @SourceTableName + ' AS src WITH (NOLOCK)
+                LEFT JOIN ' + @MappingTableName2 + ' AS map2 WITH (NOLOCK)
+                ON LOWER(src.' + QUOTENAME(@IDColumnName) + ') = LOWER(map2.ID)
+            )
+            SELECT * INTO ' + @NewTableName + ' FROM CTE_Id;';
+
+            -- Execute the dynamic SQL
+            BEGIN TRY
+                EXEC sp_executesql @DynamicSQL;
+            END TRY
+            BEGIN CATCH
+                PRINT 'Error: ' + ERROR_MESSAGE();
+            END CATCH;
+        END
+        ELSE IF @EmailColumnName IS NOT NULL AND @IDColumnName IS NOT NULL
+        BEGIN
+            -- Handle both Email and ID matching
+            SET @DynamicSQL = '
+            WITH CTE_Email AS (
+                SELECT ' + @ColumnNames + ',
+                    CASE 
+                        WHEN LOWER(src.' + QUOTENAME(@EmailColumnName) + ') IN (SELECT LOWER(New_Email) FROM ' + @MappingTableName + ' WITH (NOLOCK))
+                        THEN ''Y'' ELSE ''N'' 
+                    END AS Status,
+                    CASE 
+                        WHEN LOWER(src.' + QUOTENAME(@EmailColumnName) + ') IN (SELECT LOWER(New_Email) FROM ' + @MappingTableName + ' WITH (NOLOCK))
+                        THEN GETDATE() ELSE NULL 
+                    END AS Matched_Date_Time,
+                    map.Id as Matched_Id,
+					map.C_Matched as Cr_Matched
+                FROM ' + @SourceTableName + ' AS src WITH (NOLOCK)
+                LEFT JOIN ' + @MappingTableName + ' AS map WITH (NOLOCK)
+                ON LOWER(src.' + QUOTENAME(@EmailColumnName) + ') = LOWER(map.New_Email)
+            )
+            SELECT * INTO ' + @NewTableName + ' FROM CTE_Email;
+
+            UPDATE tgt
+            SET tgt.Status = ''Y'',
+                tgt.Matched_Date_Time = GETDATE(),
+                tgt.Matched_Id = map2.Id,
+				tgt.C_Matched = map2.C_Matched
+            FROM ' + @NewTableName + ' tgt
+            INNER JOIN ' + @MappingTableName2 + ' map2 WITH (NOLOCK)
+            ON tgt.' + QUOTENAME(@IDColumnName) + ' = map2.ID
+            WHERE tgt.Status = ''N
