@@ -1,4 +1,13 @@
+DECLARE @sql NVARCHAR(MAX);
+SET @sql = (
+    SELECT STRING_AGG(name, ', ') 
+    FROM sys.columns
+    WHERE object_id = OBJECT_ID('your_table_name') 
+    AND name NOT IN ('column_to_exclude1', 'column_to_exclude2', 'column_to_exclude3')
+);
 
+SET @sql = 'SELECT ' + @sql + ' FROM your_table_name';
+EXEC sp_executesql @sql;
 
 
 
