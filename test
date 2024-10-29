@@ -207,3 +207,32 @@ BEGIN
     END
 
 END;
+
+
+
+
+test
+
+-- Replace IN with EXISTS for Email Matching
+SET @DynamicSQL = '
+WITH CTE_TestSchema AS (
+    SELECT ' + @ColumnNames + ',
+        CASE 
+            WHEN EXISTS (SELECT 1 FROM ' + @MappingTableName + ' map WITH (NOLOCK) 
+                         WHERE LOWER(src.' + QUOTENAME(@EmailColumnName) + ') = LOWER(map.New_Email))
+            THEN ''Y'' ELSE ''N'' 
+        END AS Status,
+        CASE 
+            WHEN EXISTS (SELECT 1 FROM ' + @MappingTableName + ' map WITH (NOLOCK) 
+                         WHERE LOWER(src.' + QUOTENAME(@EmailColumnName) + ') = LOWER(map.New_Email))
+            THEN GETDATE() ELSE NULL 
+        END AS Matched_Date_Time,
+        map.Id as Matched_Id,
+        map.C_Matched as Cr_Matched
+    FROM ' + @SourceTableName + ' AS src WITH (NOLOCK)
+    LEFT JOIN ' + @MappingTableName + ' AS map WITH (NOLOCK)
+    ON LOWER(src.' + QUOTENAME(@EmailColumnName) + ') = LOWER(map.New_Email)
+)
+SELECT * INTO ' + @NewTableName + ' FROM CTE_TestSchema;';
+
+-- Similar changes for the dummy schema as shown above...
