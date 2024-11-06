@@ -62,3 +62,23 @@ invalid_length_ids = df[(df['Id'].str.len() > 16) | (df['Id'].str.len() < 16)]
 
 print("Rows with Id length not equal to 16:")
 print(invalid_length_ids)
+
+
+
+import pandas as pd
+
+# Sample DataFrame
+data = {'Name': ['John Doe', 'Alice', '123ABC', 'Tom@', 'Mary Jane', '4567']}
+df = pd.DataFrame(data)
+
+# Define a regex pattern for valid names (letters and spaces only)
+name_pattern = r'^[A-Za-z\s]+$'
+
+# Check for invalid names
+df['name_valid'] = df['Name'].str.fullmatch(name_pattern).fillna(False)
+
+# Filter rows with invalid names
+invalid_names = df[~df['name_valid']]
+
+print("Rows with invalid names:")
+print(invalid_names)
