@@ -15,3 +15,32 @@ invalid_emails = df[~df['email_valid']]
 
 print("Invalid emails:")
 print(invalid_emails)
+
+
+
+
+
+import pandas as pd
+import numpy as np
+
+# Sample DataFrame with potential edge cases
+data = {'email': ['test@example.com', 'invalid-email', 'Cap.com', 'user@domain', 'sample@domain.com']}
+df = pd.DataFrame(data)
+
+# Updated regex pattern to match emails with a valid structure
+email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+
+# Convert all entries to strings, fill NaN with empty strings
+df['email'] = df['email'].astype(str).fillna('')
+
+# Use str.fullmatch() for a complete match and ensure no NaN values
+df['email_valid'] = df['email'].str.fullmatch(email_pattern).fillna(False)
+
+# Check if there are any invalid emails
+if (~df['email_valid']).any():
+    # Filter out rows with invalid emails if there are any
+    invalid_emails = df[~df['email_valid']]
+    print("Invalid emails:")
+    print(invalid_emails)
+else:
+    print("No invalid emails found.")
