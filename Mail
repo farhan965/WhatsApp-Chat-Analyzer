@@ -44,3 +44,21 @@ if (~df['email_valid']).any():
     print(invalid_emails)
 else:
     print("No invalid emails found.")
+
+
+
+
+import pandas as pd
+
+# Sample DataFrame
+data = {'Id': ['1234567890123456', '123456789012345', '12345678901234567', '0123456789012345']}
+df = pd.DataFrame(data)
+
+# Ensure the Id column is treated as string
+df['Id'] = df['Id'].astype(str)
+
+# Filter rows where Id length is not equal to 16
+invalid_length_ids = df[(df['Id'].str.len() > 16) | (df['Id'].str.len() < 16)]
+
+print("Rows with Id length not equal to 16:")
+print(invalid_length_ids)
