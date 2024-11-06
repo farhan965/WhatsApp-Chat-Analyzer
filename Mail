@@ -1,0 +1,17 @@
+import pandas as pd
+
+# Sample DataFrame
+data = {'email': ['test@example.com', 'invalid-email', 'user@domain']}
+df = pd.DataFrame(data)
+
+# Define a regex pattern for a valid email format
+email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+
+# Check for invalid email formats
+df['email_valid'] = df['email'].str.match(email_pattern)
+
+# Filter out rows with invalid emails
+invalid_emails = df[~df['email_valid']]
+
+print("Invalid emails:")
+print(invalid_emails)
