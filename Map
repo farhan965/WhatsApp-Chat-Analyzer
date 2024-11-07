@@ -24,3 +24,35 @@ result = [
 
 # Display result
 print(result)
+
+
+
+
+import pandas as pd
+import json
+
+# Sample DataFrame
+df = pd.DataFrame({
+    'col1': ['a', 'b', 'c'],
+    'col2': [1, 2, 3],
+    'col3': [True, False, True]
+})
+
+# Generate the list of dictionaries
+result = [
+    {
+        "source": {
+            "type": str(df[col].dtype),
+            "ordinal": idx + 1
+        },
+        "sink": {
+            "name": col,
+            "type": "string"  # Or change this if you need to match the actual dtype
+        }
+    }
+    for idx, col in enumerate(df.columns)
+]
+
+# Convert result to JSON string with double quotes
+result_json = json.dumps(result, indent=4)
+print(result_json)
