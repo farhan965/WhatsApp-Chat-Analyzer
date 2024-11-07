@@ -1,0 +1,26 @@
+import pandas as pd
+
+# Sample DataFrame
+df = pd.DataFrame({
+    'col1': ['a', 'b', 'c'],
+    'col2': [1, 2, 3],
+    'col3': [True, False, True]
+})
+
+# Generate the list of dictionaries
+result = [
+    {
+        'source': {
+            'type': str(df[col].dtype), 
+            'ordinal': idx + 1
+        },
+        'sink': {
+            'name': col, 
+            'type': 'string'  # Or change this if you need to match the actual dtype
+        }
+    }
+    for idx, col in enumerate(df.columns)
+]
+
+# Display result
+print(result)
