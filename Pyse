@@ -1,0 +1,49 @@
+!pip install pyodbc pandas
+
+
+---part2
+
+import pyodbc
+import pandas as pd
+
+# Connection details
+server = 'your_server.database.windows.net'  # Azure SQL Server name
+database = 'your_database'                    # Database name
+username = 'your_username'                    # Username for Azure SQL
+password = 'your_password'                    # Password for Azure SQL
+
+# Create the connection string
+connection_string = f"DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={server};DATABASE={database};UID={username};PWD={password}"
+
+
+
+
+
+
+---part3
+
+
+# Establish connection
+conn = pyodbc.connect(connection_string)
+
+# Test the connection by querying the database version
+query = "SELECT @@VERSION"
+df = pd.read_sql(query, conn)
+print(df)
+
+
+
+--part4
+
+
+# Example query to fetch data from a table
+query = "SELECT TOP 10 * FROM your_table_name"
+data_df = pd.read_sql(query, conn)
+
+# Display the fetched data
+data_df.head()
+
+
+--part5
+
+conn.close()
