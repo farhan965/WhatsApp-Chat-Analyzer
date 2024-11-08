@@ -1,49 +1,108 @@
-!pip install pyodbc pandas
-
-
----part2
-
 import pyodbc
+
+# Dev Environment Connection
+dev_conn = pyodbc.connect(
+    'DRIVER={ODBC Driver 17 for SQL Server};SERVER=your_dev_server;DATABASE=your_dev_database;UID=your_username;PWD=your_password'
+)
+
+# Prod Environment Connection
+prod_conn = pyodbc.connect(
+    'DRIVER={ODBC Driver 17 for SQL Server};SERVER=your_prod_server;DATABASE=your_prod_database;UID=your_username;PWD=your_password'
+)
+
+
+------part 2
+
 import pandas as pd
 
-# Connection details
-server = 'your_server.database.windows.net'  # Azure SQL Server name
-database = 'your_database'                    # Database name
-username = 'your_username'                    # Username for Azure SQL
-password = 'your_password'                    # Password for Azure SQL
+query_dependencies = """
+SELECT 
+    referencing_object_name = OBJECT_NAME(referencing_id),
+    referenced_object_name = OBJECT_NAME(referenced_id)
+FROM 
+    sys.sql_expression_dependencies
+WHERE 
+    OBJECTPROPERTY(referencing_id, 'IsView') = 1
+AND OBJECTPROPERTY(referenced_id, 'IsView') = 1;
+"""
 
-# Create the connection string
-connection_string = f"DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={server};DATABASE={database};UID={username};PWD={password}"
-
-
-
-
-
-
----part3
-
-
-# Establish connection
-conn = pyodbc.connect(connection_string)
-
-# Test the connection by querying the database version
-query = "SELECT @@VERSION"
-df = pd.read_sql(query, conn)
-print(df)
+dependencies_df = pd.read_sql(query_dependencies, dev_conn)
+dependencies_df.head()
 
 
 
---part4
+
+----part 3
 
 
-# Example query to fetch data from a table
-query = "SELECT TOP 10 * FROM your_table_name"
-data_df = pd.read_sql(query, conn)
+# Function to fetch view definitions
+def get_view_definition(view_name):
+    query = f"SELECT OBJECT_DEFINITION (OBJECT_ID(N'{view_name}')) AS definition"
+    result = pd.read_sql(query, dev_conn)
+    return result['definition'][0]
 
-# Display the fetched data
-data_df.head()
+# Example: Loop through all views and save their definitions in a dictionary
+view_definitions = {}
+views = dependencies_df['referencing_object_name'].unique()
+
+for view in views:
+    view_definitions[view] = get_view_definition(view)
+
+# Display one example definition
+print(view_definitions[views[0]])
 
 
---part5
 
-conn.close()
+
+---part 4
+
+
+# Sort views based on dependencies
+sorted_views = pd.concat([dependencies_df[['referenced_object_name']].rename(columns={'referenced_object_name': 'view_name'}),
+                          dependencies_df[['referencing_object_name']].rename(columns={'referencing_object_name': 'view_name'})]
+                        ).drop_duplicates().reset_index(drop=True)
+
+# Apply each view’s updated definition in Prod
+for view in sorted_views['view_name']:
+    definition = view_definitions.get(view)
+    if definition:
+        update_query = f"CREATE OR ALTER VIEW {view} AS {definition}"
+        try:
+            with prod_conn.cursor() as cursor:
+                cursor.execute(update_query)
+                prod_conn.commit()
+            print(f"Updated {view} in Prod successfully.")
+        except Exception as e:
+            print(f"Failed to update {view} in Prod: {e}")
+
+
+
+--part 5
+# Initialize log DataFrame
+log_df = pd.DataFrame(columns=['view_name', 'status', 'message'])
+
+# Example logging within the update loop
+for view in sorted_views['view_name']:
+    definition = view_definitions.get(view)
+    if definition:
+        update_query = f"CREATE OR ALTER VIEW {view} AS {definition}"
+        try:
+            with prod_conn.cursor() as cursor:
+                cursor.execute(update_query)
+                prod_conn.commit()
+            log_df = log_df.append({'view_name': view, 'status': 'Success', 'message': 'Updated successfully'}, ignore_index=True)
+        except Exception as e:
+            log_df = log_df.append({'view_name': view, 'status': 'Failed', 'message': str(e)}, ignore_index=True)
+
+# Save log to CSV for tracking
+log_df.to_csv('view_update_log.csv', index=False)
+
+
+
+--part 6
+dev_conn.close()
+prod_conn.close()
+
+
+
+
