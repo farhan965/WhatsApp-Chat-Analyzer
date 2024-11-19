@@ -1,0 +1,27 @@
+Step 1: Generate the latest scripts for views in the dev environment using T-SQL or PowerShell. Here’s a T-SQL example to generate scripts:
+sql
+Copy code
+DECLARE @view_name NVARCHAR(128)
+DECLARE @sql NVARCHAR(MAX)
+
+DECLARE view_cursor CURSOR FOR
+SELECT name FROM sys.views WHERE schema_id = SCHEMA_ID('snowflake')
+
+OPEN view_cursor
+FETCH NEXT FROM view_cursor INTO @view_name
+
+WHILE @@FETCH_STATUS = 0
+BEGIN
+    SET @sql = 'CREATE OR ALTER VIEW snowflake.' + @view_name + ' AS ' +
+               (SELECT definition FROM sys.sql_modules WHERE object_id = OBJECT_ID('snowflake.' + @view_name))
+    
+    PRINT @sql  -- Print for debugging, or execute on UAT
+    -- EXEC('USE UATDatabase; ' + @sql) -- Uncomment to execute on UAT
+
+    FETCH NEXT FROM view_cursor INTO @view_name
+END
+
+CLOSE view_cursor
+DEALLOCATE view_cursor
+Step 2: Copy the generated scripts and run them on the UAT server by adding a job step that connects to UAT and executes the scripts.
+Step 3: Add a command to refresh dependent views on the UAT server (using sp_refreshview) to ensure all view dependencies are updated with the latest structure.
