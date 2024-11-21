@@ -1,27 +1,24 @@
-Step 1: Generate the latest scripts for views in the dev environment using T-SQL or PowerShell. Here’s a T-SQL example to generate scripts:
-sql
-Copy code
-DECLARE @view_name NVARCHAR(128)
-DECLARE @sql NVARCHAR(MAX)
+DECLARE @columns NVARCHAR(MAX);
+DECLARE @sql NVARCHAR(MAX);
 
-DECLARE view_cursor CURSOR FOR
-SELECT name FROM sys.views WHERE schema_id = SCHEMA_ID('snowflake')
+-- Get common columns
+SELECT @columns = STRING_AGG(COLUMN_NAME, ', ')
+FROM (
+    SELECT COLUMN_NAME
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_NAME = 'TableA'
+    INTERSECT
+    SELECT COLUMN_NAME
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_NAME = 'TableB'
+) AS CommonColumns;
 
-OPEN view_cursor
-FETCH NEXT FROM view_cursor INTO @view_name
+-- Construct the join query
+SET @sql = '
+SELECT ' + @columns + '
+FROM TableA
+INNER JOIN TableB
+ON TableA.CommonKey = TableB.CommonKey; -- Replace CommonKey with your actual join condition';
 
-WHILE @@FETCH_STATUS = 0
-BEGIN
-    SET @sql = 'CREATE OR ALTER VIEW snowflake.' + @view_name + ' AS ' +
-               (SELECT definition FROM sys.sql_modules WHERE object_id = OBJECT_ID('snowflake.' + @view_name))
-    
-    PRINT @sql  -- Print for debugging, or execute on UAT
-    -- EXEC('USE UATDatabase; ' + @sql) -- Uncomment to execute on UAT
-
-    FETCH NEXT FROM view_cursor INTO @view_name
-END
-
-CLOSE view_cursor
-DEALLOCATE view_cursor
-Step 2: Copy the generated scripts and run them on the UAT server by adding a job step that connects to UAT and executes the scripts.
-Step 3: Add a command to refresh dependent views on the UAT server (using sp_refreshview) to ensure all view dependencies are updated with the latest structure.
+-- Execute the query
+EXEC sp_executesql @sql;
