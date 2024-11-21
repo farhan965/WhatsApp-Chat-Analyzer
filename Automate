@@ -1,8 +1,9 @@
+
 DECLARE @columns NVARCHAR(MAX);
 DECLARE @sql NVARCHAR(MAX);
 
--- Get common columns
-SELECT @columns = STRING_AGG(COLUMN_NAME, ', ')
+-- Get common columns with table aliases
+SELECT @columns = STRING_AGG('t1.' + COLUMN_NAME + ' AS t1_' + COLUMN_NAME + ', t2.' + COLUMN_NAME + ' AS t2_' + COLUMN_NAME, ', ')
 FROM (
     SELECT COLUMN_NAME
     FROM INFORMATION_SCHEMA.COLUMNS
@@ -13,12 +14,18 @@ FROM (
     WHERE TABLE_NAME = 'TableB'
 ) AS CommonColumns;
 
+-- Debug: Print the common columns
+PRINT 'Common Columns with Aliases: ' + @columns;
+
 -- Construct the join query
 SET @sql = '
 SELECT ' + @columns + '
-FROM TableA
-INNER JOIN TableB
-ON TableA.CommonKey = TableB.CommonKey; -- Replace CommonKey with your actual join condition';
+FROM TableA t1
+INNER JOIN TableB t2
+ON t1.CommonKey = t2.CommonKey; -- Replace CommonKey with your actual join condition';
+
+-- Debug: Print the generated SQL
+PRINT @sql;
 
 -- Execute the query
 EXEC sp_executesql @sql;
