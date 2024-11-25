@@ -1,0 +1,19 @@
+SELECT 
+    referencing_schema_name = s1.name,
+    referencing_object_name = OBJECT_NAME(referencing_id),
+    referenced_schema_name = s2.name,
+    referenced_object_name = OBJECT_NAME(referenced_id)
+FROM 
+    sys.sql_expression_dependencies sed
+JOIN 
+    sys.objects o1 ON sed.referencing_id = o1.object_id
+JOIN 
+    sys.schemas s1 ON o1.schema_id = s1.schema_id
+JOIN 
+    sys.objects o2 ON sed.referenced_id = o2.object_id
+JOIN 
+    sys.schemas s2 ON o2.schema_id = s2.schema_id
+WHERE 
+    OBJECTPROPERTY(sed.referencing_id, 'IsView') = 1
+AND 
+    OBJECTPROPERTY(sed.referenced_id, 'IsView') = 1;
