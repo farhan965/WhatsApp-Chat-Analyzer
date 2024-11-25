@@ -1,8 +1,11 @@
+import pandas as pd
+
+query_dependencies = """
 SELECT 
     referencing_schema_name = s1.name,
-    referencing_object_name = OBJECT_NAME(referencing_id),
+    referencing_object_name = o1.name,
     referenced_schema_name = s2.name,
-    referenced_object_name = OBJECT_NAME(referenced_id)
+    referenced_object_name = o2.name
 FROM 
     sys.sql_expression_dependencies sed
 JOIN 
@@ -15,5 +18,103 @@ JOIN
     sys.schemas s2 ON o2.schema_id = s2.schema_id
 WHERE 
     OBJECTPROPERTY(sed.referencing_id, 'IsView') = 1
-AND 
-    OBJECTPROPERTY(sed.referenced_id, 'IsView') = 1;
+AND OBJECTPROPERTY(sed.referenced_id, 'IsView') = 1;
+"""
+
+dependencies_df = pd.read_sql(query_dependencies, dev_conn)
+dependencies_df.head()
+
+
+
+#part 2
+
+# Function to fetch view definitions
+def get_view_definition(schema_name, view_name):
+    query = f"""
+    SELECT 
+        OBJECT_DEFINITION (OBJECT_ID(N'[{schema_name}].[{view_name}]')) AS definition
+    """
+    result = pd.read_sql(query, dev_conn)
+    return result['definition'][0] if not result.empty else None
+
+# Example: Loop through all views and save their definitions in a dictionary
+view_definitions = {}
+for _, row in dependencies_df.iterrows():
+    schema, view = row['referencing_schema_name'], row['referencing_object_name']
+    view_definitions[f"{schema}.{view}"] = get_view_definition(schema, view)
+
+# Display one example definition
+print(view_definitions[list(view_definitions.keys())[0]])
+
+
+
+# Sort views based on dependencies
+sorted_views = pd.concat(
+    [
+        dependencies_df[['referenced_schema_name', 'referenced_object_name']].rename(
+            columns={'referenced_schema_name': 'schema_name', 'referenced_object_name': 'view_name'}
+        ),
+        dependencies_df[['referencing_schema_name', 'referencing_object_name']].rename(
+            columns={'referencing_schema_name': 'schema_name', 'referencing_object_name': 'view_name'}
+        ),
+    ]
+).drop_duplicates().reset_index(drop=True)
+
+# Apply each view’s updated definition in Prod
+for _, row in sorted_views.iterrows():
+    schema_name, view_name = row['schema_name'], row['view_name']
+    full_view_name = f"[{schema_name}].[{view_name}]"
+    definition = view_definitions.get(f"{schema_name}.{view_name}")
+    if definition:
+        update_query = f"""
+        ALTER VIEW {full_view_name} AS {definition}
+        """
+        try:
+            with prod_conn.cursor() as cursor:
+                cursor.execute(update_query)
+                prod_conn.commit()
+            print(f"Updated {full_view_name} in Prod successfully.")
+        except Exception as e:
+            print(f"Failed to update {full_view_name} in Prod: {e}")
+
+
+#part5
+# Initialize log DataFrame
+log_df = pd.DataFrame(columns=['schema_name', 'view_name', 'status', 'message'])
+
+# Example logging within the update loop
+for _, row in sorted_views.iterrows():
+    schema_name, view_name = row['schema_name'], row['view_name']
+    full_view_name = f"[{schema_name}].[{view_name}]"
+    definition = view_definitions.get(f"{schema_name}.{view_name}")
+    if definition:
+        update_query = f"""
+        ALTER VIEW {full_view_name} AS {definition}
+        """
+        try:
+            with prod_conn.cursor() as cursor:
+                cursor.execute(update_query)
+                prod_conn.commit()
+            log_df = log_df.append(
+                {'schema_name': schema_name, 'view_name': view_name, 'status': 'Success', 'message': 'Updated successfully'},
+                ignore_index=True
+            )
+        except Exception as e:
+            log_df = log_df.append(
+                {'schema_name': schema_name, 'view_name': view_name, 'status': 'Failed', 'message': str(e)},
+                ignore_index=True
+            )
+
+# Save log to CSV for tracking
+log_df.to_csv('view_update_log.csv', index=False)
+
+#part6
+# Close connections
+dev_conn.close()
+prod_conn.close()
+
+
+
+
+
+
