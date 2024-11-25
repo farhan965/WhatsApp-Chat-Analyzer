@@ -1,0 +1,24 @@
+# Function to fetch view definitions and return as ALTER VIEW
+def get_view_definition(schema_name, view_name):
+    query = f"""
+    SELECT 
+        OBJECT_DEFINITION (OBJECT_ID(N'[{schema_name}].[{view_name}]')) AS definition
+    """
+    result = pd.read_sql(query, dev_conn)
+    definition = result['definition'][0] if not result.empty else None
+    
+    if definition:
+        # Modify the definition to use ALTER VIEW instead of CREATE VIEW
+        if definition.strip().startswith("CREATE VIEW"):
+            definition = definition.replace("CREATE VIEW", "ALTER VIEW", 1)
+    
+    return definition
+
+# Example: Loop through all views and save their definitions in a dictionary
+view_definitions = {}
+for _, row in dependencies_df.iterrows():
+    schema, view = row['referencing_schema_name'], row['referencing_object_name']
+    view_definitions[f"{schema}.{view}"] = get_view_definition(schema, view)
+
+# Display one example definition
+print(view_definitions[list(view_definitions.keys())[0]])
