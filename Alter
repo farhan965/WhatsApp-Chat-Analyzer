@@ -22,3 +22,41 @@ for _, row in dependencies_df.iterrows():
 
 # Display one example definition
 print(view_definitions[list(view_definitions.keys())[0]])
+
+
+
+
+
+
+
+# Initialize log DataFrame
+log_df = pd.DataFrame(columns=['schema_name', 'view_name', 'status', 'message'])
+
+# Example logging within the update loop
+log_entries = []  # Temporary list to collect log entries
+
+for _, row in sorted_views.iterrows():
+    schema_name, view_name = row['schema_name'], row['view_name']
+    full_view_name = f"[{schema_name}].[{view_name}]"
+    definition = view_definitions.get(f"{schema_name}.{view_name}")
+    if definition:
+        update_query = f"""
+        ALTER VIEW {full_view_name} AS {definition}
+        """
+        try:
+            with prod_conn.cursor() as cursor:
+                cursor.execute(update_query)
+                prod_conn.commit()
+            log_entries.append(
+                {'schema_name': schema_name, 'view_name': view_name, 'status': 'Success', 'message': 'Updated successfully'}
+            )
+        except Exception as e:
+            log_entries.append(
+                {'schema_name': schema_name, 'view_name': view_name, 'status': 'Failed', 'message': str(e)}
+            )
+
+# Convert log entries to DataFrame
+log_df = pd.DataFrame(log_entries)
+
+# Save log to CSV for tracking
+log_df.to_csv('view_update_log.csv', index=False)
