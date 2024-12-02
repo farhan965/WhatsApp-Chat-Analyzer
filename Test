@@ -1,0 +1,14 @@
+DECLARE @tableName NVARCHAR(MAX) = 'your_table';
+DECLARE @sql NVARCHAR(MAX);
+
+-- Construct the dynamic SQL query
+SET @sql = (
+    SELECT STRING_AGG('[' + COLUMN_NAME + '] IS NULL', ' OR ')
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_NAME = @tableName
+);
+
+-- Construct the DELETE statement
+SET @sql = 'DELETE FROM ' + @tableName + ' WHERE ' + @sql;
+
+EXEC(@sql);
