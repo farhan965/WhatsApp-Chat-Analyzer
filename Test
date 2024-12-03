@@ -38,3 +38,32 @@ SET @sql = 'SELECT * FROM ' + @tableName + ' WHERE ' + @sql;
 
 -- Execute the query
 EXEC(@sql);
+
+
+
+
+DECLARE @tableName NVARCHAR(MAX) = 'your_table';
+DECLARE @notNullColumns NVARCHAR(MAX) = 'c1,c2,c3';
+DECLARE @sql NVARCHAR(MAX);
+
+-- Step 1: Create conditions for NOT NULL columns
+DECLARE @notNullCondition NVARCHAR(MAX);
+SET @notNullCondition = (
+    SELECT STRING_AGG('[' + COLUMN_NAME + '] IS NOT NULL', ' AND ')
+    FROM STRING_SPLIT(@notNullColumns, ',')
+);
+
+-- Step 2: Create conditions for all other columns to be NULL
+DECLARE @nullCondition NVARCHAR(MAX);
+SET @nullCondition = (
+    SELECT STRING_AGG('[' + COLUMN_NAME + '] IS NULL', ' AND ')
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_NAME = @tableName
+    AND COLUMN_NAME NOT IN (SELECT value FROM STRING_SPLIT(@notNullColumns, ','))
+);
+
+-- Step 3: Combine both conditions
+SET @sql = 'SELECT * FROM ' + @tableName + ' WHERE ' + @notNullCondition + ' AND ' + @nullCondition;
+
+-- Step 4: Execute the query
+EXEC(@sql);
