@@ -12,3 +12,29 @@ SET @sql = (
 SET @sql = 'DELETE FROM ' + @tableName + ' WHERE ' + @sql;
 
 EXEC(@sql);
+
+
+
+DECLARE @tableName NVARCHAR(MAX) = 'your_table';
+DECLARE @sql NVARCHAR(MAX);
+DECLARE @notNullColumns NVARCHAR(MAX) = 'c1,c2,c3';
+
+-- Generate dynamic conditions for all columns
+SET @sql = (
+    SELECT STRING_AGG(
+        CASE 
+            -- Condition for specific columns to be NOT NULL
+            WHEN COLUMN_NAME IN (SELECT value FROM STRING_SPLIT(@notNullColumns, ',')) 
+                THEN '[' + COLUMN_NAME + '] IS NOT NULL'
+            -- Condition for remaining columns to be NULL
+            ELSE '[' + COLUMN_NAME + '] IS NULL'
+        END, ' AND ')
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_NAME = @tableName
+);
+
+-- Construct the SELECT statement
+SET @sql = 'SELECT * FROM ' + @tableName + ' WHERE ' + @sql;
+
+-- Execute the query
+EXEC(@sql);
