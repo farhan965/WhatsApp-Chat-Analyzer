@@ -50,7 +50,8 @@ DECLARE @sql NVARCHAR(MAX);
 DECLARE @notNullCondition NVARCHAR(MAX);
 SET @notNullCondition = (
     SELECT STRING_AGG('[' + COLUMN_NAME + '] IS NOT NULL', ' AND ')
-    FROM STRING_SPLIT(@notNullColumns, ',')
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_NAME = @tableName AND COLUMN_NAME IN ('c1', 'c2', 'c3')
 );
 
 -- Step 2: Create conditions for all other columns to be NULL
@@ -58,8 +59,7 @@ DECLARE @nullCondition NVARCHAR(MAX);
 SET @nullCondition = (
     SELECT STRING_AGG('[' + COLUMN_NAME + '] IS NULL', ' AND ')
     FROM INFORMATION_SCHEMA.COLUMNS
-    WHERE TABLE_NAME = @tableName
-    AND COLUMN_NAME NOT IN (SELECT value FROM STRING_SPLIT(@notNullColumns, ','))
+    WHERE TABLE_NAME = @tableName AND COLUMN_NAME NOT IN ('c1', 'c2', 'c3')
 );
 
 -- Step 3: Combine both conditions
