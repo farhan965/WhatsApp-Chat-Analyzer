@@ -67,3 +67,20 @@ SET @sql = 'SELECT * FROM ' + @tableName + ' WHERE ' + @notNullCondition + ' AND
 
 -- Step 4: Execute the query
 EXEC(@sql);
+
+
+
+
+DECLARE @TableName NVARCHAR(MAX) = 'YourTableName';
+DECLARE @SQL NVARCHAR(MAX);
+
+-- Generate dynamic SQL to cast all columns as NVARCHAR
+SELECT @SQL = STRING_AGG('CAST(' + COLUMN_NAME + ' AS NVARCHAR(MAX)) AS ' + COLUMN_NAME, ', ')
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_NAME = @TableName;
+
+-- Wrap the query
+SET @SQL = 'SELECT ' + @SQL + ' FROM ' + @TableName;
+
+-- Execute the dynamic query
+EXEC sp_executesql @SQL;
