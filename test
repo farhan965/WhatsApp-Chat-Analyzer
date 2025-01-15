@@ -126,3 +126,27 @@ WITH summarized AS (
 
 SELECT * 
 FROM summarized;
+
+
+
+WITH summarized AS (
+    SELECT c.*, 
+           sprev.TotalKits AS PriorKits, 
+           sprev.Amount AS PriorAmount
+    FROM combined_full c
+    LEFT JOIN (
+        -- Subquery to get the previous row for each Email based on first_inst
+        SELECT *,
+               ROW_NUMBER() OVER (PARTITION BY Email ORDER BY first_inst DESC) AS rn
+        FROM combined_full
+    ) sprev
+        ON c.Email = sprev.Email
+        AND sprev.rn = 1  -- Get the most recent previous row
+        AND sprev.first_inst < c.first_inst  -- Only previous rows
+    WHERE c.first_inst = 1 
+       OR sprev.TotalKits <> c.TotalKits 
+       OR sprev.Amount <> c.Amount  -- Compare values to detect changes
+)
+
+SELECT * 
+FROM summarized;
