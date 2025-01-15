@@ -45,3 +45,35 @@ WHERE  c.first_inst = 1 OR sprev.TotalKits <> c.TotalKits OR sprev.Amount <> c.A
 )
 
 select * from summarized;
+
+
+
+
+WITH summarized AS (
+    SELECT
+        c.*,
+        sprev.TotalKits AS PriorKits,
+        sprev.Amount AS PriorAmount
+    FROM
+        combined_full c
+    OUTER APPLY (
+        SELECT
+            TotalKits,
+            Amount
+        FROM (
+            SELECT
+                TotalKits,
+                Amount,
+                ROW_NUMBER() OVER (PARTITION BY Email ORDER BY first_inst DESC) AS rn
+            FROM combined_full
+            WHERE Email = c.Email AND first_inst < c.first_inst
+        ) sprev
+        WHERE sprev.rn = 1
+    ) sprev
+    WHERE
+        c.first_inst = 1
+        OR sprev.TotalKits <> c.TotalKits
+        OR sprev.Amount <> c.Amount
+)
+
+SELECT * FROM summarized;
