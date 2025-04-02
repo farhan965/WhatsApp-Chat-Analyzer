@@ -1,17 +1,25 @@
-
 DECLARE @tableName NVARCHAR(MAX) = 'dummy.channel_test';
 DECLARE @sql NVARCHAR(MAX);
-
--- Step 1: Create condition to check NULL
 DECLARE @nullCondition NVARCHAR(MAX);
+
+-- Step 1: Create condition to check NULL, excluding 'AsOfDate' and 'Sales'
 SET @nullCondition = (
-    SELECT STRING_AGG('[' + NAME + '] IS NULL', ' AND ')
+    SELECT STRING_AGG(QUOTENAME(NAME) + ' IS NULL', ' AND ')
     FROM sys.COLUMNS
-    WHERE object_id = OBJECT_ID(@tableName) AND NAME <>'AsOfDate'
+    WHERE object_id = OBJECT_ID(@tableName) 
+    AND NAME NOT IN ('AsOfDate', 'Sales') -- Exclude columns
 );
 
--- Step 2: SET SQL
-SET @sql = 'DELETE FROM ' + @tableName + ' WHERE ' + @nullCondition;
+-- Step 2: Ensure @nullCondition is not NULL (to prevent syntax errors)
+IF @nullCondition IS NOT NULL AND @nullCondition <> ''
+BEGIN
+    -- Step 3: Construct SQL Query
+    SET @sql = 'DELETE FROM ' + @tableName + ' WHERE ' + @nullCondition;
 
--- Step 3: Execute the query
-EXEC(@sql);
+    PRINT @sql -- Debugging: Print the query before execution
+    EXEC sp_executesql @sql;
+END
+ELSE
+BEGIN
+    PRINT 'No valid columns found for deletion condition.';
+END
